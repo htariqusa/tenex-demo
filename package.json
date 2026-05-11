@@ -2,6 +2,7 @@
   "name": "tenex",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "packageManager": "pnpm@9.1.0",
   "scripts": {
     "dev": "concurrently -n api,web -c blue,green \"pnpm --filter @tenex/api dev\" \"pnpm --filter @tenex/web dev\"",
