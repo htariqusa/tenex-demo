@@ -230,18 +230,16 @@ export function LoginPage() {
 
           <div className="space-y-4">
             <ExamplePrompt>
-              "I have three meetings I need to schedule with Joe, Dan, and Sally.
-              I want to block my mornings off to work out. Can you help?"
+              What does my week look like?
             </ExamplePrompt>
             <ExamplePrompt>
-              "How much of my time am I spending in meetings?
-              How would you recommend I decrease that?"
+              Find me 30 minutes free this week
             </ExamplePrompt>
             <ExamplePrompt>
-              "What do I have tomorrow? Anything I should prep for?"
+              Draft an email to schedule a meeting with Sarah
             </ExamplePrompt>
             <ExamplePrompt>
-              "Find me 30 minutes this week to work on the project proposal"
+              How much time am I spending in meetings?
             </ExamplePrompt>
           </div>
         </div>
