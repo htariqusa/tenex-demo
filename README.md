@@ -2,6 +2,10 @@
 
 A calendar assistant that connects to Google Calendar and uses AI to help manage your schedule through natural language.
 
+## Live Demo
+
+A hosted version is deployed on Vercel. Access is restricted to authorized users only — contact the maintainers of this repo to request access.
+
 ## Features
 
 - **Google Calendar Integration** - View your calendar in a clean week view
@@ -10,6 +14,83 @@ A calendar assistant that connects to Google Calendar and uses AI to help manage
 - **Confirmation Flow** - All mutations require explicit user confirmation
 - **Meeting Analytics** - Visualize meeting patterns, focus time, and busiest days
 - **AI Draft Messages** - Generate agenda, follow-up, and reschedule emails for meetings
+
+## Running Locally
+
+### Prerequisites
+
+- [Node.js](https://nodejs.org/) (v18+)
+- [pnpm](https://pnpm.io/) (v9+)
+- A Google Cloud project with OAuth credentials (see below)
+- An [Anthropic API key](https://console.anthropic.com/) (for Claude AI chat)
+- A [Groq API key](https://console.groq.com/) (for AI-drafted meeting messages)
+
+### Setup
+
+```bash
+# 1. Clone the repo
+git clone https://github.com/htariqusa/tenex-demo.git
+cd tenex-demo
+
+# 2. Install dependencies
+pnpm install
+
+# 3. Copy the example env file
+cp .env.example .env
+
+# 4. Fill in your API keys and secrets in .env (see below)
+
+# 5. Start development servers (API + Web)
+pnpm dev
+```
+
+The app will be running at:
+- **Web:** http://localhost:5173
+- **API:** http://localhost:3001
+
+### Environment Variables
+
+Fill in all values in your `.env` file:
+
+| Variable | Description | Where to get it |
+|----------|-------------|-----------------|
+| `GOOGLE_CLIENT_ID` | Google OAuth 2.0 client ID | Google Cloud Console (see below) |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth 2.0 client secret | Google Cloud Console (see below) |
+| `GOOGLE_REDIRECT_URI` | Set to `http://localhost:3001/api/auth/callback` for local | - |
+| `ANTHROPIC_API_KEY` | API key for Claude AI | [console.anthropic.com](https://console.anthropic.com/) |
+| `GROQ_API_KEY` | API key for Groq (Llama models) | [console.groq.com](https://console.groq.com/) |
+| `SESSION_SECRET` | 32+ character random string | Generate with `openssl rand -base64 32` |
+| `PORT` | API server port (default: `3001`) | - |
+| `CLIENT_URL` | Frontend URL (default: `http://localhost:5173`) | - |
+
+### Google OAuth Setup
+
+You need your own Google Cloud project to run this app. Google OAuth controls who can log in — you must add authorized test users in your project's consent screen.
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a new project (or select existing)
+3. Enable the **Google Calendar API**:
+   - Go to APIs & Services > Library
+   - Search "Google Calendar API" and enable it
+4. Configure the OAuth consent screen:
+   - Go to APIs & Services > OAuth consent screen
+   - User type: **External**
+   - Add your app name and contact email
+   - Under **Test users**, add the Google accounts that should have access
+   - Only users listed here can log in while the app is in "Testing" status
+5. Create OAuth credentials:
+   - Go to APIs & Services > Credentials > Create Credentials > OAuth client ID
+   - Application type: **Web application**
+   - Authorized redirect URIs: `http://localhost:3001/api/auth/callback`
+6. Copy the **Client ID** and **Client Secret** into your `.env`
+
+### Groq API Setup
+
+Groq is used for drafting meeting messages (agenda, follow-up, reschedule, etc.).
+
+1. Go to [console.groq.com](https://console.groq.com/)
+2. Create an account and generate an API key
+3. Copy the key into `GROQ_API_KEY` in your `.env`
 
 ## Architecture
 
@@ -32,64 +113,6 @@ React SPA  <-->  Express API  <-->  Google Calendar API
 - Session managed via httpOnly cookies
 - SSE for streaming chat responses
 - Tool-use pattern for calendar operations
-
-## Quick Start (Local)
-
-```bash
-# Install dependencies
-pnpm install
-
-# Copy environment file and fill in values
-cp .env.example .env
-
-# Start development servers (API + Web)
-pnpm dev
-```
-
-The app will be running at:
-- **Web:** http://localhost:5173
-- **API:** http://localhost:3001
-
-## Environment Variables
-
-See `.env.example` for all required variables:
-
-| Variable | Description |
-|----------|-------------|
-| `GOOGLE_CLIENT_ID` | Google OAuth 2.0 client ID |
-| `GOOGLE_CLIENT_SECRET` | Google OAuth 2.0 client secret |
-| `GOOGLE_REDIRECT_URI` | OAuth callback URL |
-| `ANTHROPIC_API_KEY` | Anthropic API key for Claude |
-| `GROQ_API_KEY` | Groq API key for message drafts |
-| `SESSION_SECRET` | 32+ character secret for token encryption |
-| `PORT` | API server port (default: 3001) |
-| `CLIENT_URL` | Frontend URL (default: http://localhost:5173) |
-
-## Google OAuth Setup
-
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project (or select existing)
-3. Enable the **Google Calendar API**
-4. Configure OAuth consent screen (External, add your email as test user)
-5. Create OAuth credentials (Web application)
-   - Local redirect URI: `http://localhost:3001/api/auth/callback`
-   - Vercel redirect URI: `https://your-domain.vercel.app/api/auth/callback`
-6. Copy Client ID and Client Secret to your `.env`
-
-## Deploy to Vercel
-
-The app is configured to deploy both frontend and API as a single Vercel project.
-
-1. Connect your repo to [Vercel](https://vercel.com)
-2. Set all environment variables in the Vercel dashboard:
-   - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
-   - `GOOGLE_REDIRECT_URI` = `https://your-domain.vercel.app/api/auth/callback`
-   - `ANTHROPIC_API_KEY`, `GROQ_API_KEY`
-   - `SESSION_SECRET`
-   - `CLIENT_URL` = `https://your-domain.vercel.app`
-3. Deploy
-
-> **Note:** Sessions are in-memory on Vercel serverless. They reset on cold starts, requiring users to re-authenticate. For persistent sessions, swap in Vercel KV or a hosted database.
 
 ## Agent Tools
 
