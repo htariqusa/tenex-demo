@@ -5,9 +5,10 @@ import { cn } from '@/lib/utils';
 import type { PendingAction } from '@tenex/shared';
 
 const SUGGESTED_PROMPTS = [
-  "What's my week look like?",
-  "Find me 30 minutes for a meeting tomorrow",
-  "How much time am I spending in meetings?",
+  "Draft an email to schedule a meeting with Sarah",
+  "Send a reminder about my 2pm meeting today",
+  "Cancel my meeting with Dan tomorrow",
+  "What does my week look like?",
 ];
 
 export function ChatPanel() {
@@ -208,6 +209,7 @@ function PendingActionCard({
   };
 
   const isBatchCreate = action.type === 'create_events';
+  const isDelete = action.type === 'delete_event';
   const events = isBatchCreate
     ? (action.payload as { events: Array<{ title: string; start: string; end: string; attendees?: string[] }> }).events
     : null;
@@ -220,7 +222,7 @@ function PendingActionCard({
         </div>
         <div className="flex-1">
           <h4 className="font-semibold text-violet-900">
-            {isBatchCreate ? `Create ${events?.length} Calendar Events?` : 'Create Calendar Event?'}
+            {isDelete ? 'Cancel Calendar Event?' : isBatchCreate ? `Create ${events?.length} Calendar Events?` : 'Create Calendar Event?'}
           </h4>
 
           {isBatchCreate && events ? (
@@ -292,17 +294,20 @@ function PendingActionCard({
         <button
           onClick={handleConfirm}
           disabled={isConfirming || isCancelling}
-          className="flex items-center gap-1.5 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50 transition"
+          className={cn(
+            "flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50 transition",
+            isDelete ? "bg-red-600 hover:bg-red-700" : "bg-green-600 hover:bg-green-700"
+          )}
         >
           {isConfirming ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin" />
-              Creating...
+              {isDelete ? 'Canceling...' : 'Creating...'}
             </>
           ) : (
             <>
               <Check className="h-4 w-4" />
-              {isBatchCreate ? `Create ${events?.length} Events` : 'Create Event'}
+              {isDelete ? 'Yes, Cancel It' : isBatchCreate ? `Create ${events?.length} Events` : 'Create Event'}
             </>
           )}
         </button>

@@ -1,5 +1,5 @@
 import type { PendingAction } from '@tenex/shared';
-import { createEvent } from './google-calendar.js';
+import { createEvent, deleteEvent } from './google-calendar.js';
 
 // In-memory store for pending actions (in production, use Redis or DB)
 const pendingActions = new Map<string, { action: PendingAction; tokens: { accessToken: string; refreshToken: string } }>();
@@ -117,6 +117,20 @@ export async function executePendingAction(actionId: string): Promise<{ success:
           success: errors.length === 0,
           result: { created: results, errors },
         };
+      }
+
+      case 'delete_event': {
+        const deletePayload = action.payload as { eventId: string };
+
+        await deleteEvent(
+          tokens.accessToken,
+          tokens.refreshToken,
+          deletePayload.eventId
+        );
+
+        pendingActions.delete(actionId);
+
+        return { success: true, result: { deleted: true, eventId: deletePayload.eventId } };
       }
 
       default:

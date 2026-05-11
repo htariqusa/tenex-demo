@@ -1,8 +1,9 @@
 import { Tool } from '@anthropic-ai/sdk/resources/messages';
+import Groq from 'groq-sdk';
 
 export const draftEmailDefinition: Tool = {
   name: 'draft_email',
-  description: 'Generate an email draft. Use this when the user asks you to write/draft an email for scheduling meetings, follow-ups, or any calendar-related communication.',
+  description: 'Generate personalized email drafts. Can create separate drafts for each recipient. Use when the user asks to write/draft emails for scheduling, follow-ups, or calendar-related communication.',
   input_schema: {
     type: 'object' as const,
     properties: {
@@ -18,17 +19,21 @@ export const draftEmailDefinition: Tool = {
       },
       context: {
         type: 'string',
-        description: 'Additional context (e.g., "block mornings for workout", "prefer afternoons", "30 minute meetings")',
+        description: 'Additional context about the situation (e.g., "mornings blocked for workout, only afternoons available", "30 minute check-in meetings")',
       },
       suggestedTimes: {
         type: 'array',
         items: { type: 'string' },
-        description: 'Optional suggested meeting times to include in the email',
+        description: 'Available time slots to suggest (e.g., ["Monday 1-2pm", "Tuesday 2-3pm"])',
+      },
+      perRecipient: {
+        type: 'boolean',
+        description: 'If true, generate a separate personalized email for each recipient. Default: true when multiple recipients.',
       },
       tone: {
         type: 'string',
         enum: ['formal', 'casual', 'friendly'],
-        description: 'Tone of the email',
+        description: 'Tone of the email. Default: friendly',
       },
     },
     required: ['recipients', 'purpose'],
@@ -40,95 +45,94 @@ export interface DraftEmailInput {
   purpose: 'schedule_meeting' | 'reschedule' | 'cancel' | 'follow_up' | 'availability_request' | 'other';
   context?: string;
   suggestedTimes?: string[];
+  perRecipient?: boolean;
   tone?: 'formal' | 'casual' | 'friendly';
 }
 
-export function executeDraftEmail(input: DraftEmailInput): { draft: string; subject: string } {
-  const recipientNames = input.recipients.join(', ');
-  const lastRecipient = input.recipients[input.recipients.length - 1];
-  const otherRecipients = input.recipients.slice(0, -1).join(', ');
-  const recipientList = input.recipients.length > 1
-    ? `${otherRecipients} and ${lastRecipient}`
-    : recipientNames;
+let groq: Groq | null = null;
+function getGroqClient(): Groq {
+  if (!groq) {
+    groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+  }
+  return groq;
+}
 
-  let subject = '';
-  let body = '';
+async function generateDraft(
+  recipient: string,
+  purpose: string,
+  context: string | undefined,
+  suggestedTimes: string[] | undefined,
+  tone: string
+): Promise<{ draft: string; subject: string }> {
+  const timesText = suggestedTimes?.length
+    ? `\nAvailable times to suggest: ${suggestedTimes.join(', ')}`
+    : '';
+
+  const prompt = `Write a short, ${tone} email to ${recipient}.
+Purpose: ${purpose.replace(/_/g, ' ')}
+${context ? `Context: ${context}` : ''}${timesText}
+
+Rules:
+- Keep it under 120 words
+- Be natural and conversational, not robotic
+- Include suggested times as bullet points if provided
+- Sign off with just "[Your name]"
+- Do NOT include a subject line in the body`;
+
+  const [bodyCompletion, subjectCompletion] = await Promise.all([
+    getGroqClient().chat.completions.create({
+      model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+      max_tokens: 400,
+      messages: [
+        { role: 'system', content: 'You are a concise, professional email writer. Write natural-sounding emails.' },
+        { role: 'user', content: prompt },
+      ],
+    }),
+    getGroqClient().chat.completions.create({
+      model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+      max_tokens: 30,
+      messages: [
+        { role: 'system', content: 'Generate a short email subject line. Just the subject, nothing else.' },
+        { role: 'user', content: `Email to ${recipient} about: ${purpose.replace(/_/g, ' ')}. ${context || ''}` },
+      ],
+    }),
+  ]);
+
+  return {
+    draft: bodyCompletion.choices[0]?.message?.content?.trim() || '',
+    subject: subjectCompletion.choices[0]?.message?.content?.trim() || `Meeting with ${recipient}`,
+  };
+}
+
+export async function executeDraftEmail(input: DraftEmailInput): Promise<{ drafts: Array<{ recipient: string; subject: string; draft: string }> }> {
   const tone = input.tone || 'friendly';
-  const greeting = tone === 'formal' ? 'Dear' : 'Hi';
-  const signoff = tone === 'formal' ? 'Best regards' : 'Best';
+  const perRecipient = String(input.perRecipient) !== 'false' && input.recipients.length > 1;
 
-  switch (input.purpose) {
-    case 'schedule_meeting':
-      subject = `Meeting Request: Let's Connect`;
-      body = `${greeting} ${recipientList},
-
-I hope this email finds you well. I'd like to schedule a meeting with ${input.recipients.length > 1 ? 'each of you' : 'you'} to connect and discuss.
-
-${input.context ? `Note: ${input.context}\n\n` : ''}${input.suggestedTimes?.length ? `Here are some times that work for me:\n${input.suggestedTimes.map(t => `• ${t}`).join('\n')}\n\n` : ''}Please let me know what times work best for your schedule, and I'll send over a calendar invite.
-
-${signoff},
-[Your name]`;
-      break;
-
-    case 'availability_request':
-      subject = `Checking Your Availability`;
-      body = `${greeting} ${recipientList},
-
-I'm looking to set up ${input.recipients.length > 1 ? 'meetings with each of you' : 'a meeting'} and wanted to check your availability.
-
-${input.context ? `${input.context}\n\n` : ''}${input.suggestedTimes?.length ? `I have the following times open:\n${input.suggestedTimes.map(t => `• ${t}`).join('\n')}\n\n` : ''}Could you please share a few times that work for you? Once I hear back, I'll send calendar invites.
-
-${signoff},
-[Your name]`;
-      break;
-
-    case 'reschedule':
-      subject = `Request to Reschedule Our Meeting`;
-      body = `${greeting} ${recipientList},
-
-I apologize, but I need to reschedule our upcoming meeting. ${input.context ? input.context : ''}
-
-${input.suggestedTimes?.length ? `Would any of these alternative times work?\n${input.suggestedTimes.map(t => `• ${t}`).join('\n')}\n\n` : 'Could you please share some times that would work better for you?\n\n'}I appreciate your flexibility and look forward to connecting soon.
-
-${signoff},
-[Your name]`;
-      break;
-
-    case 'cancel':
-      subject = `Meeting Cancellation`;
-      body = `${greeting} ${recipientList},
-
-I regret to inform you that I need to cancel our scheduled meeting. ${input.context ? input.context : ''}
-
-I apologize for any inconvenience this may cause. I'd be happy to reschedule when possible—please let me know if you'd like to find another time.
-
-${signoff},
-[Your name]`;
-      break;
-
-    case 'follow_up':
-      subject = `Following Up on Our Meeting`;
-      body = `${greeting} ${recipientList},
-
-Thank you for taking the time to meet with me. ${input.context ? input.context : 'I wanted to follow up on our discussion.'}
-
-Please let me know if you have any questions or if there's anything else I can help with.
-
-${signoff},
-[Your name]`;
-      break;
-
-    default:
-      subject = `Regarding Our Schedule`;
-      body = `${greeting} ${recipientList},
-
-${input.context || 'I wanted to reach out regarding our schedules.'}
-
-${input.suggestedTimes?.length ? `Available times:\n${input.suggestedTimes.map(t => `• ${t}`).join('\n')}\n\n` : ''}Please let me know your thoughts.
-
-${signoff},
-[Your name]`;
+  if (perRecipient) {
+    // Generate separate AI-powered drafts for each recipient in parallel
+    const results = await Promise.all(
+      input.recipients.map(async (recipient) => {
+        const { draft, subject } = await generateDraft(
+          recipient,
+          input.purpose,
+          input.context,
+          input.suggestedTimes,
+          tone
+        );
+        return { recipient, subject, draft };
+      })
+    );
+    return { drafts: results };
   }
 
-  return { draft: body, subject };
+  // Single email to all recipients
+  const recipientList = input.recipients.join(', ');
+  const { draft, subject } = await generateDraft(
+    recipientList,
+    input.purpose,
+    input.context,
+    input.suggestedTimes,
+    tone
+  );
+  return { drafts: [{ recipient: recipientList, subject, draft }] };
 }

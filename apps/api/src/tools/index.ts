@@ -5,6 +5,7 @@ import { createEventDefinition, executeCreateEvent, CreateEventInput } from './c
 import { executeCreateEvents, CreateEventsInput } from './create-events.js';
 import { analyzeCalendarDefinition, executeAnalyzeCalendar } from './analyze-calendar.js';
 import { draftEmailDefinition, executeDraftEmail, DraftEmailInput } from './draft-email.js';
+import { executeDeleteEvent, DeleteEventInput } from './delete-event.js';
 import { storePendingAction } from '../services/pending-actions.js';
 import type { PendingAction } from '@tenex/shared';
 
@@ -79,8 +80,17 @@ export async function executeTool(
     }
 
     case 'draft_email': {
-      const result = executeDraftEmail(input as unknown as DraftEmailInput);
+      const result = await executeDraftEmail(input as unknown as DraftEmailInput);
       return { result };
+    }
+
+    case 'delete_event': {
+      const { pendingAction } = executeDeleteEvent(input as unknown as DeleteEventInput);
+      storePendingAction(pendingAction, context.accessToken, context.refreshToken);
+      return {
+        result: { status: 'pending_confirmation', action_id: pendingAction.id },
+        pendingAction,
+      };
     }
 
     case 'create_events': {
